@@ -89,3 +89,19 @@ def normalize(variables: np.array):
     mx = np.max(variables, axis=0)
     mn = np.min(variables, axis=0)
     return (variables - mn) / (mx - mn)
+
+def dbscan_clustering(variables:list, eps:float, min_samples:int):
+    db = DBSCAN(eps=eps, min_samples=min_samples).fit(variables)
+    labels = db.labels_
+    
+    # Number of clusters in labels, ignoring noise if present.
+    n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+    print(n_clusters_)
+
+    return db, labels
+
+def kmeans_clustering(variables:list, n_clusters:int):
+    km = k_means(variables, n_clusters=n_clusters)
+    labels = km[1]
+
+    return km, labels
