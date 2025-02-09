@@ -6,36 +6,49 @@ import cartopy.feature as cfeature # used for map projection
 import cartopy.crs as ccrs # used for map projection
 import numpy as np
 from numpy import linalg as LA # to plot the moments (by calculating the eigenvalues)
+import xarray
 
-# Project Imports
-from func_tools.helper_functions import get_lon_lat, get_moments
+def map_background(label:bool=False, extent:list=[-100, 0, 0, 60]):
+    """
+        A helper function for creating the map background.
+    
+        Parameters
+        ----------
+    
+        extent (list): corresponds to the location information of the showed map. this controls where the projection appears, i.e., which part of earth map should appear on the projection. Its four entries can be viewd as (starting_longitude, ending_longitude, starting_latitude, ending_latitude).
+        
+        label (boolean): to short label or not on the output map background
+    
+        Returns
+        -------
+    
+        () matplotlib axes object
+        
+    """
+    
+    plt.figure(figsize = (20, 10))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+    ax.coastlines()
+    ax.set_extent(extent)
+    ax.gridlines(draw_labels=label) # show labels or not
+    __LAND__ = cfeature.NaturalEarthFeature('physical', 'land', '10m',
+                                          edgecolor='face',
+                                          facecolor=cfeature.COLORS['land'],
+                                              linewidth=.1)
+    __OCEAN__ = cfeature.NaturalEarthFeature('physical', 'ocean', '10m',
+                                           edgecolor='face',
+                                           facecolor=cfeature.COLORS['water'], linewidth=.1)
+    ax.add_feature(__LAND__, zorder=0)
+    ax.add_feature(__OCEAN__)
+    return ax
 
-def map_background(label=False, extent=[-100, 0, 0, 60]):
-  # A helpder function for creating the map background.
-  # INPUT:
-  # "extent": corresponds to the location information of the showed map.
-  # "label": boolean
+def plot_kmeans_inertia(sum_of_squares:list, max_clusters:int):
+    plt.plot(max_clusters, sum_of_squares, 'bx-')
+    plt.xlabel('k')
+    plt.ylabel('Sum_of_squared_distances')
+    plt.title('Inertia Values against the Number of Cluster k')
 
-  # OUTPUT:
-  # Matplotlib AXES object
-
-  plt.figure(figsize = (20, 10))
-  ax = plt.axes(projection=ccrs.PlateCarree())
-  ax.coastlines()
-  ax.set_extent(extent)
-  ax.gridlines(draw_labels=label) # show labels or not
-  __LAND__ = cfeature.NaturalEarthFeature('physical', 'land', '10m',
-                                      edgecolor='face',
-                                      facecolor=cfeature.COLORS['land'],
-                                          linewidth=.1)
-  __OCEAN__ = cfeature.NaturalEarthFeature('physical', 'ocean', '10m',
-                                       edgecolor='face',
-                                       facecolor=cfeature.COLORS['water'], linewidth=.1)
-  ax.add_feature(__LAND__, zorder=0)
-  ax.add_feature(__OCEAN__)
-  return ax
-
-def plot_tracks(storms, color='blue', all_track=True, marker_color='black'):
+def plot_tracks(storms:xarray.DataArray, extent:list=[-100, 0, 0, 60], color:str='orange', all_track:bool=True, marker_color:str='black', label:bool=True):
     # INPUT:
     # ax: Matplotlib axes object
     # storm: a Xarray DATASET object (this can be adjusted if desired)
@@ -44,16 +57,19 @@ def plot_tracks(storms, color='blue', all_track=True, marker_color='black'):
     # OUTPUT:
     # None
 
-    print(f"There are {storms.dims['storm']} storms.\n")
-    storm_num = storms.dims['storm']
-    ax = map_background(extent=[-100, 0, 0, 60], label=True)
+    __STORM__ = "storm"
+    storm_num = storms.dims[__STORM__] if __STORM__ in storms.dims else 1
+    
+    print(f"There are {storm_num} storms.\n")
+    ax = map_background(extent=extent, label=label)
     
     for ind in range(storm_num):
-      storm = storms.sel(storm=ind)
-      plot_one_track(ax, storm, color='orange')
-    # plt.legend()
+      storm = storms.sel(storm=ind) if storm_num > 1 else storms
+      ax = plot_one_track(ax=ax, storm=storm, color=color, all_track=all_track, marker_color=marker_color)
+        
+    return ax
     
-def plot_one_track(ax, storm, color='blue', all_track=True, marker_color='black'):
+def plot_one_track(ax, storm:xarray.DataArray, color:str='orange', all_track:bool=True, marker_color='black'):
     # INPUT:
     # ax: Matplotlib axes object
     # storm: a Xarray DATASET object (this can be adjusted if desired)
@@ -62,37 +78,114 @@ def plot_one_track(ax, storm, color='blue', all_track=True, marker_color='black'
     # OUTPUT:
     # None
     
-    lon_lst, lat_lst = get_lon_lat(storm)
+    lon_lst = storm.lon.values
+    lat_lst = storm.lat.values
+    
     if all_track:
         ax.plot(lon_lst, lat_lst, '-o', color=color, linewidth=2, markersize=3) # marker='.'
         ax.plot(lon_lst[-1], lat_lst[-1], color=marker_color, marker='x', markersize=10)
     ax.plot(lon_lst[0], lat_lst[0], color=marker_color, marker='*', markersize=10)
     ax.text(lon_lst[0], lat_lst[0]-2, str(storm.name.values)[2:-1], horizontalalignment='center')
 
-def plot_track_moments(storm, lon_weighted, lat_weighted, lon_var, lat_var, xy_var):
+    return ax
 
+def plot_track_moments(storms:xarray.DataArray, extent:list=[-100, 0, 0, 60], label:bool=True):
+    """
+        Plot track moments as an ellipse
+    
+        Parameters
+        ----------
+    
+        storms (xarray): storms in xarray format
+        
+        weights (list): to short label or not on the output map background
+    
+        Returns
+        -------
+    
+        () matplotlib axes object
+    
+    """
+
+    __STORM__ = "storm"
+    storm_num = storms.dims[__STORM__] if __STORM__ in storms.dims else 1
+    
+    for ind in range(storm_num):
+        #filter storm
+        storm = storms.sel(storm=ind) if storm_num > 1 else storms
+
+        # plot tracks
+        ax = plot_tracks(storms=storm, extent=extent, label=label)
+
+        # plot ellipse
+        N, R_1, R_2, circle = _ellipse_params(lon_mean=storm.lon_mean.values ** 1, 
+                                              lat_mean=storm.lat_mean.values ** 1, 
+                                              lon_var=storm.lon_var.values ** 1, 
+                                              lat_var=storm.lat_var.values ** 1, 
+                                              lon_lat_cov=storm.lon_lat_cov.values ** 1)
+
+        ax.plot(R_1, R_2, '-', color='black', linewidth=1)
+        ax.plot([circle[0,0], circle[0,int(N/2)]]+storm.lon_mean.values,
+                [circle[1,0], circle[1,int(N/2)]]+storm.lat_mean.values, '-gh')
+        ax.plot([circle[0,int(N/4)], circle[0,int(N*3/4)]]+storm.lon_mean.values,
+                [circle[1,int(N/4)], circle[1,int(N*3/4)]]+storm.lat_mean.values, '-gh')
+        
+    return ax
+
+
+def _ellipse_params(lon_mean:list, lat_mean:list, lon_var:list, lat_var:list, lon_lat_cov:list):
     # Rotate the circle and calculate points on the circle
     # Set N larger to make the oval more precise and to consume more electricity
     N=1000
     t = np.linspace(0, 2 * np.pi, N)
-    circle = [np.sqrt(lon_var) * np.cos(t), np.sqrt(lat_var) * np.sin(t)]
-    _, R_rot = LA.eig(np.array([[lon_var, xy_var], [xy_var, lat_var]]))
-    circle = np.dot(R_rot, circle)
-    R_1, R_2 = circle[0, :] + lon_weighted, circle[1, :] + lat_weighted
     
-    # Plot
-    ax = map_background(extent=[-100, 20, 0, 80], label=True)
-    plot_one_track(ax, storm)
-    ax.plot(R_1, R_2, '-', color='black', linewidth=1)
-    ax.plot([circle[0,0], circle[0,int(N/2)]]+lon_weighted,
-            [circle[1,0], circle[1,int(N/2)]]+lat_weighted, '-gh')
-    ax.plot([circle[0,int(N/4)], circle[0,int(N*3/4)]]+lon_weighted,
-            [circle[1,int(N/4)], circle[1,int(N*3/4)]]+lat_weighted, '-gh')
+    lon_std = lon_var ** (1/2)
+    lat_std = lat_var ** (1/2)
+    
+    circle = [lon_std * np.cos(t), lat_std * np.sin(t)]
+    _, R_rot = LA.eig(np.array([[lon_var, lon_lat_cov], [lon_lat_cov, lat_var]]))
+    circle = np.dot(R_rot, circle)
+    R_1, R_2 = circle[0, :] + lon_mean, circle[1, :] + lat_mean
 
-def plot_centroids(moment_list:list, labels:list, title_name:str):
-    colors = ['green', 'blue', 'yellow', 'green', 'red', 'magenta','orange','gray','white','brown','purple','cyan']
+    return N, R_1, R_2, circle
+    
+
+def plot_centroids(storms:xarray.DataArray, title_name:str, cmap_name:str='Set1'):
+    """
+        Plot track centroids
+    
+        Parameters
+        ----------
+    
+        storms (xarray.Dataset): storms in xarray format with pre-calculated moments
+        
+        title_name (str): title of the plot
+
+        cmap_name (str): matplotlib cmap name
+    
+        Returns
+        -------
+    
+        (None)
+    
+    """
+    
+    colors = plt.cm.get_cmap(cmap_name)
+    clusters = storms.cluster.values
     ax = map_background()
-    for k in range(len(moment_list)):
-        ax.plot(moment_list[k][0], moment_list[k][1], c=colors[labels[k]], marker='*')
+    for i in range(len(storms.lon_mean.values)):
+        cluster = clusters[i]
+        if cluster is not None:
+            ax.plot(storms.lon_mean.values[i], storms.lat_mean.values[i], c=colors(cluster), marker='*')
 
     plt.title(title_name)
+
+
+
+
+
+
+
+
+
+
