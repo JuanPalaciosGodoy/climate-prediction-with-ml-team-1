@@ -2,12 +2,42 @@
 
 # Python Imports
 import numpy as np
+import pandas as pd
 import xarray
 from sklearn.cluster import k_means # to perform k-means
 from sklearn.cluster import DBSCAN # to perform dbscan
 
 # Library Imports
 from func_tools.plotting_functions import plot_kmeans_inertia
+
+def get_storms_summary_data(storms:xarray.Dataset) -> pd.DataFrame:
+    """
+        storms summary data as pandas DataFrame. This includes max wind speed, cluster, 
+    
+        Parameters
+        ----------
+            storms (xarray.Dataset): storms in xarray format
+    
+        Returns
+        -------
+            (pd.DataFrame): pandas DataFrame with storm summary data (cluster, max wind speed)
+    
+    """
+    clusters = np.array(storms.cluster.values)
+    max_wind_speed = np.nanmax(storms.wmo_wind.values, axis=1)
+    lon_std = np.array(storms.lon_std.values)
+    lat_std = np.array(storms.lat_std.values)
+    year = np.array(storms.avg_year.values)
+    month = np.array(storms.avg_month.values)
+    day = np.array(storms.avg_day.values)
+    return pd.DataFrame(np.array([clusters,
+                                  max_wind_speed,
+                                  lon_std,
+                                  lat_std,
+                                  year,
+                                  month,
+                                  day]).T, 
+                        columns=["cluster", "max_wind_speed", "lon_std", "lat_std", "avg_year", "avg_month", "avg_day"])
 
 def storms_kmeans(storms:xarray.Dataset, k_clusters:int, get_variables) -> xarray.Dataset:
     """
@@ -112,8 +142,8 @@ def standardize(variables: np.array) -> np.array:
             (np.array) standardized variables
     
     """
-    mu = np.mean(variables, axis=0)
-    std = np.std(variables, axis=0)
+    mu = np.mean(variables.astype(float), axis=0)
+    std = np.std(variables.astype(float), axis=0)
     return (variables - mu)/std
 
 def normalize(variables: np.array) -> np.array:
@@ -129,8 +159,8 @@ def normalize(variables: np.array) -> np.array:
             (np.array) normalized variables
     
     """
-    mx = np.max(variables, axis=0)
-    mn = np.min(variables, axis=0)
+    mx = np.max(variables.astype(float), axis=0)
+    mn = np.min(variables.astype(float), axis=0)
     return (variables - mn) / (mx - mn)
 
 def get_storms_moments(storms:xarray.Dataset) -> np.array:
@@ -208,7 +238,7 @@ def get_storms_with_moments(storms:xarray.Dataset, weights:list=[]) -> xarray.Da
         -------
             (xarray.Dataset): assign X-centroid, Y-centroid, X_var, Y_var, and XY_var to each storm
     
-    """
+    """ 
     
     moments_list = np.array([_get_storm_moments(storms.sel(storm=i), weights=weights) 
                             for i in range(storms.dims['storm'])
@@ -222,7 +252,14 @@ def get_storms_with_moments(storms:xarray.Dataset, weights:list=[]) -> xarray.Da
     lon_lat_cov = moments_list[4]
     lon_std = lon_var ** 1/2
     lat_std = lat_var ** 1/2
+    lon_delta = moments_list[5]
+    lat_delta = moments_list[6]
+    avg_year = moments_list[7]
+    avg_month = moments_list[8]
+    avg_day = moments_list[9]
     lon_lat_corr = lon_lat_cov / (lon_std * lat_std)
+
+    # moments
     lon_mean_xarray = _assign_cluster(storms=storms, cluster_labels=lon_mean, name="lon_mean", data_type="float")
     lat_mean_xarray = _assign_cluster(storms=storms, cluster_labels=lat_mean, name="lat_mean", data_type="float")
     lon_var_xarray = _assign_cluster(storms=storms, cluster_labels=lon_var, name="lat_var", data_type="float")
@@ -231,6 +268,15 @@ def get_storms_with_moments(storms:xarray.Dataset, weights:list=[]) -> xarray.Da
     lon_std_xarray = _assign_cluster(storms=storms, cluster_labels=lon_std, name="lon_std", data_type="float")
     lat_std_xarray = _assign_cluster(storms=storms, cluster_labels=lat_std, name="lat_std", data_type="float")
     lon_lat_corr_xarray = _assign_cluster(storms=storms, cluster_labels=lon_lat_corr, name="lon_lat_corr", data_type="float")
+
+    # deltas
+    lon_delta_xarray = _assign_cluster(storms=storms, cluster_labels=lon_delta, name="lon_delta", data_type="float")
+    lat_delta_xarray = _assign_cluster(storms=storms, cluster_labels=lat_delta, name="lat_delta", data_type="float")
+
+    # dates
+    month_xarray = _assign_cluster(storms=storms, cluster_labels=avg_month, name="avg_month", data_type="int")
+    year_xarray = _assign_cluster(storms=storms, cluster_labels=avg_year, name="avg_year", data_type="int")
+    day_xarray = _assign_cluster(storms=storms, cluster_labels=avg_day, name="avg_day", data_type="int")
         
     # assign moments
     storms = storms.assign(lon_mean=(lon_mean_xarray))
@@ -241,6 +287,11 @@ def get_storms_with_moments(storms:xarray.Dataset, weights:list=[]) -> xarray.Da
     storms = storms.assign(lon_std=(lon_std_xarray))
     storms = storms.assign(lat_std=(lat_std_xarray))
     storms = storms.assign(lon_lat_corr=(lon_lat_corr_xarray))
+    storms = storms.assign(lon_delta=(lon_delta_xarray))
+    storms = storms.assign(lat_delta=(lat_delta_xarray))
+    storms = storms.assign(avg_year=(month_xarray))
+    storms = storms.assign(avg_month=(year_xarray))
+    storms = storms.assign(avg_day=(day_xarray))
 
     return storms
 
@@ -282,8 +333,31 @@ def _get_storm_moments(storm:xarray.Dataset, weights:list=[]) -> tuple[list]:
         
     # M2 (second moment = variance of lat and of lon / covariance of lat to lon
     cv = np.ma.cov([lon_weighted, lat_weighted])
+
+    # lon and lat delta
+    lon_delta = np.ptp(lon_lst)
+    lat_delta = np.ptp(lat_lst)
+
+    # median month and year
+    timestamps = storm.iso_time.values  # Adjust the variable name if different
+    
+    # Convert byte strings to pandas datetime, handling missing values
+    timestamps = pd.to_datetime([t.decode("utf-8") if isinstance(t, bytes) else t for t in timestamps], errors="coerce")
+    
+    # Drop NaN values
+    timestamps = timestamps.dropna()
+    
+    # Extract month and day
+    years = timestamps.year
+    months = timestamps.month
+    days = timestamps.day
+    
+    # Compute the average month and average day
+    avg_year = round(np.nanmean(years))
+    avg_month = round(np.nanmean(months))
+    avg_day = round(np.nanmean(days))
         
-    return [lon_mean, lat_mean, cv[0, 0], cv[1, 1], cv[0, 1]]
+    return [lon_mean, lat_mean, cv[0, 0], cv[1, 1], cv[0, 1], lon_delta, lat_delta, avg_year, avg_month, avg_day]
 
 def _get_lon_lat(storms:xarray.Dataset) -> tuple[list]:
     """

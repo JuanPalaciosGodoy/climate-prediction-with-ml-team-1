@@ -5,8 +5,53 @@ import matplotlib.pyplot as plt # matplotlib
 import cartopy.feature as cfeature # used for map projection
 import cartopy.crs as ccrs # used for map projection
 import numpy as np
+import pandas as pd
 from numpy import linalg as LA # to plot the moments (by calculating the eigenvalues)
 import xarray
+import plotly.figure_factory as ff
+import plotly.express as px
+
+def plot_clusters_box_whiskers(variables:pd.DataFrame, y_name:str) -> None:
+    """
+        Create histogram with density curve.
+    
+        Parameters
+        ----------
+    
+        variables (pandas.DataFrame): pandas dataframe with columns "cluster" and y_name
+        
+        y_name (str): name of the plotted variable in the y axis
+    
+        Returns
+        -------
+    
+        (None)
+        
+    """
+    
+    fig = px.box(variables, x="cluster", y=y_name, color="cluster", points="all")
+    fig.show()
+
+def plot_histogram(variables:np.array, group_labels:list, nbins:int=1000) -> None: 
+    """
+        Create histogram with density curve.
+    
+        Parameters
+        ----------
+    
+        variables (numpy.array): variables to plot
+        
+        nbins (int): number of bins.
+    
+        Returns
+        -------
+    
+        (None)
+        
+    """
+
+    fig = ff.create_distplot(variables.astype(float), group_labels, bin_size=[nbins] * len(group_labels))
+    fig.show()
 
 def map_background(label:bool=False, extent:list=[-100, 0, 0, 60]):
     """
