@@ -27,9 +27,11 @@ def get_storms_summary_data(storms:xarray.Dataset) -> pd.DataFrame:
     max_wind_speed = np.nanmax(storms.wmo_wind.values, axis=1)
     lon_std = np.array(storms.lon_std.values)
     lat_std = np.array(storms.lat_std.values)
-    year = np.array(storms.avg_year.values)
-    month = np.array(storms.avg_month.values)
-    day = np.array(storms.avg_day.values)
+    year = np.array(storms.avg_month.values).astype(int)
+    month = np.array(storms.avg_year.values).astype(int)
+    day = np.array(storms.avg_day.values).astype(int)
+
+    
     return pd.DataFrame(np.array([clusters,
                                   max_wind_speed,
                                   lon_std,
