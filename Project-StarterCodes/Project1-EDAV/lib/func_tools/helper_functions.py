@@ -11,7 +11,7 @@ from sklearn.mixture import GaussianMixture # to perform gaussian mixture model
 # Library Imports
 from func_tools.plotting_functions import plot_kmeans_inertia
 
-def calculate_pdi(storm:xarray.Dataset) -> pd.DataFrame:
+def calculate_pdi(storm:xarray.Dataset) -> float:
     """
     Calculate the Power Dissipation Index (PDI) from an xarray DataArray.
 
@@ -25,7 +25,7 @@ def calculate_pdi(storm:xarray.Dataset) -> pd.DataFrame:
     """
 
     # Ensure index is datetime
-    time = pd.to_datetime(storm.to_dataframe()['iso_time'].str.decode("utf-8"))
+    time = pd.to_datetime(storm.iso_time.values)
     
     wind_speed = np.nanmax(storm.wmo_wind.values) * 0.51444
 
@@ -33,12 +33,25 @@ def calculate_pdi(storm:xarray.Dataset) -> pd.DataFrame:
     wind_speed_cubed = np.power(wind_speed, 3)
 
     # Calculate time differences in seconds
-    time_diff = time.diff().dt.total_seconds()
+    max_time = time.max()
+    min_time = time.min()
+    total_time_seconds = (max_time - min_time).total_seconds()
 
     # Compute PDI using Riemann sum
-    pdi = np.nansum(wind_speed_cubed * time_diff)
+    pdi = np.nansum(wind_speed_cubed * total_time_seconds)
 
     return pdi*10**-11
+
+def calculate_lifespan(storm:xarray.Dataset) -> int:
+    # Ensure index is datetime
+    time = pd.to_datetime(storm.iso_time.values)
+
+    # Calculate time differences in seconds
+    max_time = time.max()
+    min_time = time.min()
+    
+    return (max_time - min_time).days
+    
 
 def get_storms_summary_data(storms:xarray.Dataset) -> pd.DataFrame:
     """
@@ -61,6 +74,7 @@ def get_storms_summary_data(storms:xarray.Dataset) -> pd.DataFrame:
     month = np.array(storms.avg_month.values)
     day = np.array(storms.avg_day.values)
     pdi = np.array(storms.pdi.values)
+    lifespan = np.array(storms.lifespan_days.values)
     return pd.DataFrame(np.array([clusters,
                                   max_wind_speed,
                                   lon_std,
@@ -68,8 +82,9 @@ def get_storms_summary_data(storms:xarray.Dataset) -> pd.DataFrame:
                                   year,
                                   month,
                                   day,
-                                  pdi]).T, 
-                        columns=["cluster", "max_wind_speed", "lon_std", "lat_std", "avg_year", "avg_month", "avg_day", "pdi"])
+                                  pdi, 
+                                  lifespan]).T, 
+                        columns=["cluster", "max_wind_speed", "lon_std", "lat_std", "avg_year", "avg_month", "avg_day", "pdi", "lifespan(days)"])
 
 def storms_kmeans(storms:xarray.Dataset, k_clusters:int, get_variables) -> xarray.Dataset:
     """
@@ -319,6 +334,7 @@ def get_storms_with_moments(storms:xarray.Dataset, weights:list=[]) -> xarray.Da
     avg_month = moments_list[8]
     avg_day = moments_list[9]
     pdi = moments_list[10]
+    lifespan = moments_list[11]
     lon_lat_corr = lon_lat_cov / (lon_std * lat_std)
 
     # moments
@@ -342,6 +358,9 @@ def get_storms_with_moments(storms:xarray.Dataset, weights:list=[]) -> xarray.Da
 
     # pdi
     pdi_xarray = _assign_cluster(storms=storms, cluster_labels=pdi, name="pdi", data_type="float")
+
+    #lifespan
+    lifespan_xarray = _assign_cluster(storms=storms, cluster_labels=lifespan, name="lifespan(Days)", data_type="float")
     
     # assign moments
     storms = storms.assign(lon_mean=(lon_mean_xarray))
@@ -358,6 +377,7 @@ def get_storms_with_moments(storms:xarray.Dataset, weights:list=[]) -> xarray.Da
     storms = storms.assign(avg_year=(year_xarray))
     storms = storms.assign(avg_day=(day_xarray))
     storms = storms.assign(pdi=(pdi_xarray))
+    storms = storms.assign(lifespan_days=(lifespan_xarray))
 
     return storms
 
@@ -425,8 +445,11 @@ def _get_storm_moments(storm:xarray.Dataset, weights:list=[]) -> tuple[list]:
 
     # calculate pdi
     pdi = calculate_pdi(storm=storm)
+
+    # life span
+    lifespan = calculate_lifespan(storm=storm)
         
-    return [lon_mean, lat_mean, cv[0, 0], cv[1, 1], cv[0, 1], lon_delta, lat_delta, avg_year, avg_month, avg_day, pdi]
+    return [lon_mean, lat_mean, cv[0, 0], cv[1, 1], cv[0, 1], lon_delta, lat_delta, avg_year, avg_month, avg_day, pdi, lifespan]
 
 def _get_lon_lat(storms:xarray.Dataset) -> tuple[list]:
     """
