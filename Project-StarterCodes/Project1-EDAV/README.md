@@ -17,7 +17,7 @@ Term: Spring 2025
   
 **Contribution statement**: ([more information and examples](doc/a_note_on_contributions.md))
 
-SP, JP, AK, and AMF collaboratively designed the study. AMF worked on comparing clusters using data from different time intervals to determine which data to input to the clustering algorithm. AMF drafted the outline of the data story and all team members added results from their section.
+SP, JP, AK, and AMF collaboratively designed the study. AMF worked on comparing clusters using data from different time intervals to determine which data to input to the clustering algorithm. AMF drafted the outline of the data story and all team members added results from their section. SP obtained ENSO, AMM, and NAO data sets and conducted background research on their impacts on hurricane development in the Atlantic Ocean.  
 All team members contributed to the GitHub repository and prepared the presentation. All team members approve our work presented in our GitHub repository including this contribution statement.
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is organized as follows.
