@@ -6,9 +6,39 @@ import pandas as pd
 import xarray
 from sklearn.cluster import k_means # to perform k-means
 from sklearn.cluster import DBSCAN # to perform dbscan
+from sklearn.mixture import GaussianMixture # to perform gaussian mixture model
 
 # Library Imports
 from func_tools.plotting_functions import plot_kmeans_inertia
+
+def calculate_pdi(storm:xarray.Dataset) -> pd.DataFrame:
+    """
+    Calculate the Power Dissipation Index (PDI) from an xarray DataArray.
+
+    Parameters
+    ----------
+        storm (xarray.Dataset): storm in xarray format
+
+    Returns
+    -------
+        (float): PDI value in units of m^3/s^2
+    """
+
+    # Ensure index is datetime
+    time = pd.to_datetime(storm.to_dataframe()['iso_time'].str.decode("utf-8"))
+    
+    wind_speed = np.nanmax(storm.wmo_wind.values) * 0.51444
+
+    # Cube the wind speeds
+    wind_speed_cubed = np.power(wind_speed, 3)
+
+    # Calculate time differences in seconds
+    time_diff = time.diff().dt.total_seconds()
+
+    # Compute PDI using Riemann sum
+    pdi = np.nansum(wind_speed_cubed * time_diff)
+
+    return pdi*10**-11
 
 def get_storms_summary_data(storms:xarray.Dataset) -> pd.DataFrame:
     """
@@ -30,14 +60,16 @@ def get_storms_summary_data(storms:xarray.Dataset) -> pd.DataFrame:
     year = np.array(storms.avg_year.values)
     month = np.array(storms.avg_month.values)
     day = np.array(storms.avg_day.values)
+    pdi = np.array(storms.pdi.values)
     return pd.DataFrame(np.array([clusters,
                                   max_wind_speed,
                                   lon_std,
                                   lat_std,
                                   year,
                                   month,
-                                  day]).T, 
-                        columns=["cluster", "max_wind_speed", "lon_std", "lat_std", "avg_year", "avg_month", "avg_day"])
+                                  day,
+                                  pdi]).T, 
+                        columns=["cluster", "max_wind_speed", "lon_std", "lat_std", "avg_year", "avg_month", "avg_day", "pdi"])
 
 def storms_kmeans(storms:xarray.Dataset, k_clusters:int, get_variables) -> xarray.Dataset:
     """
@@ -129,6 +161,34 @@ def storms_dbscan(storms:xarray.Dataset, eps:float, min_samples:int, get_variabl
     # assign clusters
     return storms.assign(cluster=(cluster_xarray))
 
+def storms_gmm(storms:xarray.Dataset, n_clusters:int, get_variables) -> xarray.Dataset:
+    """
+        run Gaussian Mixture Model over given variables. The variables are calculated by using the passed function get_variables() which takes as an input the parameter storms
+    
+        Parameters
+        ----------
+            storms (xarray.Dataset): storms in xarray format
+
+            n_clusters (int): number of clusters
+
+            get_variables (function): function to fetch the variables from the dataset storms.
+    
+        Returns
+        -------
+            (xarray.DataArray): xarray of storms with assigned cluster as kmeans_cluster
+    
+    """
+    variables = get_variables(storms=storms)
+    gmm = GaussianMixture(n_components=n_clusters)
+    gmm.fit(variables)
+    cluster_labels = gmm.predict(variables)
+
+    # get xarray of clusters
+    cluster_xarray = _assign_cluster(storms=storms, cluster_labels=cluster_labels, name="gmm_cluster", data_type="int")
+
+    # assign clusters
+    return storms.assign(cluster=(cluster_xarray))
+
 def standardize(variables: np.array) -> np.array:
     """
         standardize input variables across axis=1. That is, standardized = (x - mean)/ standard deviation
@@ -183,7 +243,8 @@ def get_storms_moments(storms:xarray.Dataset) -> np.array:
                            storms.lat_mean.values[mask],
                            storms.lon_var.values[mask],
                            storms.lat_var.values[mask],
-                           storms.lon_lat_cov.values[mask]]).T
+                           storms.lon_lat_cov.values[mask]],
+                           storms.pdi.values[mask]).T
     except:
         raise ValueError("need to calculate moments first by using the function get_storms_with_moments()")
     
@@ -257,6 +318,7 @@ def get_storms_with_moments(storms:xarray.Dataset, weights:list=[]) -> xarray.Da
     avg_year = moments_list[7]
     avg_month = moments_list[8]
     avg_day = moments_list[9]
+    pdi = moments_list[10]
     lon_lat_corr = lon_lat_cov / (lon_std * lat_std)
 
     # moments
@@ -277,7 +339,10 @@ def get_storms_with_moments(storms:xarray.Dataset, weights:list=[]) -> xarray.Da
     month_xarray = _assign_cluster(storms=storms, cluster_labels=avg_month, name="avg_month", data_type="int")
     year_xarray = _assign_cluster(storms=storms, cluster_labels=avg_year, name="avg_year", data_type="int")
     day_xarray = _assign_cluster(storms=storms, cluster_labels=avg_day, name="avg_day", data_type="int")
-        
+
+    # pdi
+    pdi_xarray = _assign_cluster(storms=storms, cluster_labels=pdi, name="pdi", data_type="float")
+    
     # assign moments
     storms = storms.assign(lon_mean=(lon_mean_xarray))
     storms = storms.assign(lat_mean=(lat_mean_xarray))
@@ -289,9 +354,10 @@ def get_storms_with_moments(storms:xarray.Dataset, weights:list=[]) -> xarray.Da
     storms = storms.assign(lon_lat_corr=(lon_lat_corr_xarray))
     storms = storms.assign(lon_delta=(lon_delta_xarray))
     storms = storms.assign(lat_delta=(lat_delta_xarray))
-    storms = storms.assign(avg_year=(month_xarray))
-    storms = storms.assign(avg_month=(year_xarray))
+    storms = storms.assign(avg_month=(month_xarray))
+    storms = storms.assign(avg_year=(year_xarray))
     storms = storms.assign(avg_day=(day_xarray))
+    storms = storms.assign(pdi=(pdi_xarray))
 
     return storms
 
@@ -356,8 +422,11 @@ def _get_storm_moments(storm:xarray.Dataset, weights:list=[]) -> tuple[list]:
     avg_year = round(np.nanmean(years))
     avg_month = round(np.nanmean(months))
     avg_day = round(np.nanmean(days))
+
+    # calculate pdi
+    pdi = calculate_pdi(storm=storm)
         
-    return [lon_mean, lat_mean, cv[0, 0], cv[1, 1], cv[0, 1], lon_delta, lat_delta, avg_year, avg_month, avg_day]
+    return [lon_mean, lat_mean, cv[0, 0], cv[1, 1], cv[0, 1], lon_delta, lat_delta, avg_year, avg_month, avg_day, pdi]
 
 def _get_lon_lat(storms:xarray.Dataset) -> tuple[list]:
     """
