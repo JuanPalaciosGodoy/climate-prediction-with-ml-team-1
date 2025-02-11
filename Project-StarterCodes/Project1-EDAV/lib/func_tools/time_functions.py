@@ -32,7 +32,7 @@ def add_origin_year(ds):
         origin_years.append(origin_year)
 
     ds['origin_year'] = ('storm', origin_years)
-    ds = tks.set_coords('origin_year')
+    ds = ds.set_coords('origin_year')
 
     return ds
 
@@ -42,7 +42,7 @@ def select_years(ds, start_year, end_year):
     based on the origin_year coordinate.
     """
     
-    mask = (tks.origin_year >= start_year) & (tks.origin_year <= end_year)
-    tks_filtered = tks.where(mask, drop=True)
+    mask = (ds.origin_year >= start_year) & (ds.origin_year <= end_year)
+    ds_filtered = ds.where(mask, drop=True)
 
-    return tks_filtered
+    return ds_filtered
