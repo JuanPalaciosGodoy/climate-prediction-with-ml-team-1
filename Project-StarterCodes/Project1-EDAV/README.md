@@ -17,7 +17,7 @@ Term: Spring 2025
   
 **Contribution statement**: ([more information and examples](doc/a_note_on_contributions.md))
 
-SP, JP, AK, and AMF collaboratively designed the study. AMF worked on comparing clusters using data from different time intervals to determine which data to input to the clustering algorithm. AMF drafted the outline of the data story and all team members added results from their section. AK developed a function to calculate the PDI of a storm and worked on GMM clustering, using the DBI metric to compare the three clustering algorithms implemented.
+SP, JP, AK, and AMF collaboratively designed the study. AMF worked on comparing clusters using data from different time intervals to determine which data to input to the clustering algorithm. AMF drafted the outline of the data story and all team members added results from their section. AK developed a function to calculate the PDI of a storm and worked on GMM clustering, using the DBI metric to compare the three clustering algorithms implemented. JP worked on the DBSCAN clustering algorithm, standardization and normalization of variables, and contributed to the PDI inclusion in the clustering models and the box plot generation.
 All team members contributed to the GitHub repository and prepared the presentation. All team members approve our work presented in our GitHub repository including this contribution statement.
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is organized as follows.
