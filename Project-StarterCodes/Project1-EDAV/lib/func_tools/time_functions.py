@@ -7,7 +7,7 @@ import xarray as xr
 
 def to_datetime64(ds):
     """
-    Takes a ds with time as a string and returns a ds with coordinate iso_time
+    Takes a ds with time as a string and returns a ds with coordinate new_time
     that has type datetime64
     """
     
@@ -15,8 +15,8 @@ def to_datetime64(ds):
     iso_time_flat_str = iso_time_flat.astype(str)
     iso_time_flat_dt = pd.to_datetime(iso_time_flat_str, errors='coerce').to_numpy().reshape(ds['iso_time'].shape)
 
-    ds['iso_time'] = (('storm', 'date_time'), iso_time_flat_dt)
-    ds = ds.set_coords('iso_time')
+    ds['new_time'] = (('storm', 'date_time'), iso_time_flat_dt)
+    ds = ds.set_coords('new_time')
 
     return ds
 
@@ -28,7 +28,7 @@ def add_origin_year(ds):
     
     origin_years = []
     for storm in range(0,len(ds.storm)):
-        origin_year = int(ds.iso_time.dt.year[storm][0])
+        origin_year = int(ds.new_time.dt.year[storm][0])
         origin_years.append(origin_year)
 
     ds['origin_year'] = ('storm', origin_years)
