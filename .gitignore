@@ -4,3 +4,6 @@
 *-checkpoint.*
 checkpoint/
 .ipynb_checkpoints/
+# Ignore Python cache files and folders
+__pycache__/
+*.py[cod]
