@@ -13,7 +13,7 @@ Term: Spring 2025
     + Andrew Marshall Fagerheim
 
 
-+ Project summary: In this project, explore connections between hurricane clustering and large-scale, interannual climate conditions. In particular, we investigated whether adding an additional input to the clustering algorithm (power dissipation index - PDI) improves the clusters correlation with ENSO/NAO. During this course of this exploration, we tried using different clustering algorithms (K-Means, DBScan, and Gaussian Mixture Models) and different time intervals of hurricane data.
++ Project summary: In this project, explore connections between hurricane clustering and large-scale, interannual climate conditions. In particular, we investigated whether adding an additional input to the clustering algorithm (power dissipation index - PDI) improves the clusters correlation with ENSO/AMM/NAO. During this course of this exploration, we tried using different clustering algorithms (K-Means, DBScan, and Gaussian Mixture Models) and different time intervals of hurricane data.
   
 **Contribution statement**: ([more information and examples](doc/a_note_on_contributions.md))
 
