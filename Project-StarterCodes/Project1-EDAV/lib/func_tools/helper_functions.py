@@ -26,7 +26,7 @@ def calculate_pdi(storm: xarray.Dataset) -> float:
     """
 
     # Ensure index is datetime
-    time = pd.to_datetime(storm.iso_time.values)
+    time = pd.to_datetime(storm.to_dataframe()["iso_time"].str.decode("utf-8"))
 
     wind_speed = np.nanmax(storm.wmo_wind.values) * 0.51444
 
@@ -46,7 +46,7 @@ def calculate_pdi(storm: xarray.Dataset) -> float:
 
 def calculate_lifespan(storm: xarray.Dataset) -> int:
     # Ensure index is datetime
-    time = pd.to_datetime(storm.iso_time.values)
+    time = pd.to_datetime(storm.to_dataframe()["iso_time"].str.decode("utf-8"))
 
     # Calculate time differences in seconds
     max_time = time.max()
